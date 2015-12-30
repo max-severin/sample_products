@@ -265,7 +265,12 @@ function cartGetCartContent(){
 			if(trim($strOptions) != "")
 			$tmp["name"].="  (".$strOptions.")";
 			if ( $cart_item["min_order_amount"] > $cart_item["Quantity"] )
-			$tmp["min_order_amount"] = $cart_item["min_order_amount"];						//Added Milti - Garett			if ( $product["min_order_amount"] > 1 && $cart_item["Quantity"] % $product["min_order_amount"] != 0 ) {			$tmp["multiplicity"] = $product["min_order_amount"];			}
+			$tmp["min_order_amount"] = $cart_item["min_order_amount"];
+
+			if ( $cart_item["min_order_amount"] > 1 && $cart_item["Quantity"] % $cart_item["min_order_amount"] != 0 ) {			
+				$tmp["multiplicity"] = $cart_item["min_order_amount"];			
+			}
+
 			$total_price += $cart_item["Quantity"]*$costUC;
 			$cart_content[] = $tmp;
 		}
@@ -313,7 +318,12 @@ function cartGetCartContent(){
 					$_SESSION["gids"][$j] );
 					$product = db_fetch_row( $q_product );
 					if ( $product["min_order_amount"] > $_SESSION["counts"][$j] )
-					$tmp["min_order_amount"] = $product["min_order_amount"];											if ( $product["min_order_amount"] > 1 && ($_SESSION["counts"][$j] % $product["min_order_amount"]) != 0 ) {						$tmp["multiplicity"] = $product["min_order_amount"];						}
+					$tmp["min_order_amount"] = $product["min_order_amount"];											
+
+					if ( $product["min_order_amount"] > 1 && ($_SESSION["counts"][$j] % $product["min_order_amount"]) != 0 ) {						
+						$tmp["multiplicity"] = $product["min_order_amount"];						
+					}
+					
 					$freight_cost += $_SESSION["counts"][$j]*$product["shipping_freight"];
 					$cart_content[] = $tmp;
 					$total_price += GetPriceProductWithOption(
