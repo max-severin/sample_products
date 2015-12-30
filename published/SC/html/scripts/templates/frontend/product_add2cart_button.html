@@ -9,7 +9,7 @@
 	{if $__cpt_local_settings.request_product_count&&!$widget}
 		{lbl_cart_product_quantity}:&nbsp;<input name="product_qty" class="product_qty" type="text" size="3" default_value="{$product_info.min_order_amount}" value="{$product_info.min_order_amount}">&nbsp;
 	{/if}
-	<input name='add2cart' {if ($PAGE_VIEW eq 'facebook')||($PAGE_VIEW eq 'vkontakte')}type="submit" value="{"str_add_to_cart_string"|transcape}" {else}type="image" src="{if $__cpt_local_settings.view eq 'small'}{$button_add2cart_small}{else}{$button_add2cart_big}{/if}" alt="{"str_add_to_cart_string"|translate}" {/if} title="{"str_add_to_cart_string"|translate}"
+	<input name='add2cart' id="product-add2cart-main" {if ($PAGE_VIEW eq 'facebook')||($PAGE_VIEW eq 'vkontakte')}type="submit" value="{"str_add_to_cart_string"|transcape}" {else}type="image" src="{if $__cpt_local_settings.view eq 'small'}{$button_add2cart_small}{else}{$button_add2cart_big}{/if}" alt="{"str_add_to_cart_string"|translate}" {/if} title="{"str_add_to_cart_string"|translate}"
 		{if $smarty.const.CONF_SHOPPING_CART_VIEW ne $smarty.const.SHCART_VIEW_PAGE || $widget}
 		class="add2cart_handler" rel="{if $widget}widget{/if}" {/if} >
 	{elseif $smarty.const.CONF_SHOW_ADD2CART eq 1 && $smarty.const.CONF_CHECKSTOCK && !$product_info.in_stock && $product_info.ordering_available}
@@ -61,3 +61,52 @@ jQuery( document ).ready(function( $ ) {
 </script>
 {/literal}
 {/if}
+
+{if $product_info.sample_price > 0}
+{literal}
+<style>
+#product-add2cart-sample {
+ 	background: #5bc0de none repeat scroll 0 0;
+    border: 1px solid #46b8da;
+    border-radius: 3px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 5px 0;
+    padding: 1px 5px;
+}
+#product-add2cart-sample:hover {
+	background-color: #31b0d5;
+	border-color: #269abc;
+}
+</style>
+{/literal}
+
+<br />
+-- Or --
+<br />
+<input type="hidden" id="product-option-sample" name="option_999999999" value="0" />
+<input type="hidden" id="product-param-sample" name="sample" value="0" />
+<input type="submit" id="product-add2cart-sample" name="add2cart" value="Order Sample"
+	{if $smarty.const.CONF_SHOPPING_CART_VIEW ne $smarty.const.SHCART_VIEW_PAGE || $widget}
+	class="sample_add2cart_handler" {/if} />
+{/if}
+
+{literal}
+<script type="text/javascript">
+	var sampleButton = document.getElementById("product-add2cart-sample");
+
+	sampleButton.onclick = function() {
+		document.getElementById("product-option-sample").value = 1;
+		document.getElementById("product-param-sample").value = 1;		
+	}
+	var mainButton = document.getElementById("product-add2cart-main");
+
+	mainButton.onclick = function() {
+		document.getElementById("product-option-sample").value = 0;
+		document.getElementById("product-param-sample").value = 0;			
+	}
+
+</script>
+{/literal}

@@ -166,6 +166,45 @@ Behaviour.register({
 			return false;
 		}
 	},
+	'.sample_add2cart_handler' : function(element) {
+
+		element.onclick = function() {
+
+			var objForm = getFormByElem(this);
+			if (!objForm)
+				return true;
+
+			var r_productParam = getElementsByClass('product_option', objForm);
+
+			var query = '';
+			for (var i = r_productParam.length - 1; i >= 0; i--) {
+
+				if (!parseInt(r_productParam[i].value))
+					continue;
+
+				if (r_productParam[i].name)
+					query += '&' + r_productParam[i].name + '='
+							+ parseInt(r_productParam[i].value);
+			}
+
+			query += '&option_999999999=1';
+
+			var r_productQty = getElementByClass('product_qty', objForm);
+			if (r_productQty) {
+				r_productQty = parseInt(r_productQty.value);
+				if (r_productQty > 1) {
+					query += '&product_qty=' + r_productQty;
+				}
+			}
+
+			var url = ORIG_LANG_URL
+					+ set_query('?ukey=cart&sample=1&view=noframe&action=add_product&'
+									+ query + '&productID='
+									+ objForm.getAttribute('rel'), '');
+			openFadeIFrame(url);
+			return false;
+		}
+	},
 	'.product_option' : function(e) {
 		e.onchange = function() {
 			if(formatPrice&&defaultCurrency&&defaultCurrency.getView){

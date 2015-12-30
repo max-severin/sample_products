@@ -333,17 +333,26 @@ function moveCartFromSession2DB() //all products in shopping cart, which are in 
 						" values( '".$itemID."', '".$var."' )\n" );
 				}
 
+				if ($_SESSION["sample"][$key]) {
+					$quantity = 1;
+					$sample = 1;
+				} else {
+					$quantity = $_SESSION["counts"][$key];
+					$sample = 0;
+				}
 				// insert item into cart
 				db_query("insert ".SHOPPING_CARTS_TABLE.
-					"(customerID, itemID, Quantity)".
-					"values( '".$customerID."', '".$itemID."', '".$_SESSION["counts"][$key].
+					"(customerID, itemID, Quantity, sample)".
+					"values( '".$customerID."', '".$itemID."', '".$quantity."', '".$sample.
 						"' )\n" );
 			}
 			else
 			{
+				if (!$_SESSION["sample"][$key]) {
 				db_query( "update ".SHOPPING_CARTS_TABLE.
 					" set Quantity=Quantity + ".$_SESSION["counts"][$key]." ".
 					" where customerID=".$customerID." and itemID=".$itemID."\n" );
+				}
 			}
 
 		}
@@ -351,6 +360,7 @@ function moveCartFromSession2DB() //all products in shopping cart, which are in 
 		unset($_SESSION["gids"]);
 		unset($_SESSION["counts"]);
 		unset($_SESSION["configurations"]);
+		unset($_SESSION["sample"]);
 	}
 }
 
@@ -1413,7 +1423,8 @@ function detectPDA(){
 				break;
 			}
 		}
-		//return $pda;		return false;
+		//return $pda;		
+		return false;
 }
 
 function make_clean_slug($string,$prefix,$table,$slug_field,$id_field = '',$id = null){

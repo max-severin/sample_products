@@ -16,7 +16,13 @@ if(isset($_POST["add2cart_x"])||isset($_POST["add2cart"])) { //add product to ca
 
 	$qty = max(1,isset($_POST['product_qty'])?intval($_POST['product_qty']):1);
 
-	$res = cartAddToCart($productID, $variants, $qty );
+	if ( (isset($_GET['sample']) && $_GET['sample'] == 1) || (isset($_POST['sample']) && $_POST['sample'] == 1) ) {
+		$sample = 1;
+	} else {
+		$sample = 0;
+	}
+
+	$res = cartAddToCart($productID, $variants, $qty, $sample );
 
 	$Register = &Register::getInstance();
 	/*@var $Register Register*/
@@ -102,8 +108,13 @@ if (isset($productID) && $productID>=0 && !isset($_POST["add_topic"]) && !isset(
 		$smarty->assign("main_content_template", "product_info.frame.html");
 
 		$a = $product;
-		$a["PriceWithUnit"] = show_price( $a["Price"] );				$a["map_priceWithUnit"] = show_price( $a["map_price"] );
+		$a["PriceWithUnit"] = show_price( $a["Price"] );				
+		$a["map_priceWithUnit"] = show_price( $a["map_price"] );
 		$a["list_priceWithUnit"] = show_price( $a["list_price"] );
+
+		$q_sample_price = db_phquery('SELECT sample_price FROM SC_categories WHERE categoryID=(SELECT categoryID FROM SC_products WHERE productID=?)', $productID);
+		$sample_price = db_fetch_assoc( $q_sample_price );
+		$a["sample_price"] = $sample_price["sample_price"];
 			
 		$currencyEntry = Currency::getSelectedCurrencyInstance();
 		$a["price_incurr"] = $currencyEntry->convertUnits($a["Price"]);

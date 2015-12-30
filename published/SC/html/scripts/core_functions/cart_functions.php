@@ -121,7 +121,24 @@ function GetStrOptions($variants)
 	foreach($variants as $variantID){
 		$result[] = $res_cache[$variantID];
 	}
-	return count($result)?implode(', ',$result):"";
+
+	if ( count($result) ) {
+		$res_str = '';
+
+		foreach ($result as $value) {		
+			if ($value != '') {
+				if ($res_str == '') {
+					$res_str .= $value;
+				} else {
+					$res_str .= ', ' . $value;
+				}
+			}
+		}
+
+		return $res_str;
+	} else {
+		return "";
+	}
 }
 
 function CodeItemInClient($variants, $productID)
@@ -218,6 +235,7 @@ function cartClearCartContet($mode='succes'){
 			unset($_SESSION["gids"]);
 			unset($_SESSION["counts"]);
 			unset($_SESSION["configurations"]);
+			unset($_SESSION["sample"]);
 		}
 	}
 }
@@ -234,7 +252,7 @@ function cartGetCartContent(){
 	$customerEntry = Customer::getAuthedInstance();
 	if(!is_null($customerEntry)){//get cart content from the database
 		$q = db_phquery('
-			SELECT t3.*, t1.itemID, t1.Quantity, t4.thumbnail FROM ?#SHOPPING_CARTS_TABLE t1
+			SELECT t3.*, t1.itemID, t1.Quantity, t1.sample, t4.thumbnail FROM ?#SHOPPING_CARTS_TABLE t1
 				LEFT JOIN ?#SHOPPING_CART_ITEMS_TABLE t2 ON t1.itemID=t2.itemID
 				LEFT JOIN ?#PRODUCTS_TABLE t3 ON t2.productID=t3.productID
 				LEFT JOIN ?#PRODUCT_PICTURES t4 ON t3.default_picture=t4.photoID
@@ -243,7 +261,18 @@ function cartGetCartContent(){
 			// get variants
 			$variants=GetConfigurationByItemId( $cart_item["itemID"] );
 			LanguagesManager::ml_fillFields(PRODUCTS_TABLE, $cart_item);
-			$costUC = GetPriceProductWithOption( $variants, $cart_item["productID"]);
+			if ( isset($cart_item["sample"]) && $cart_item["sample"] == 1 ) {
+				$q_sample_price = db_phquery('SELECT sample_price FROM SC_categories WHERE categoryID=(SELECT categoryID FROM SC_products WHERE productID=?)', $cart_item["productID"]);
+				$sample_price = db_fetch_assoc( $q_sample_price );
+				$costUC = $sample_price["sample_price"];
+
+				$quantity = 1;
+				$free_shipping = 1;
+			} else {
+				$costUC = GetPriceProductWithOption( $variants, $cart_item["productID"]);
+				$quantity = $cart_item["Quantity"];
+				$free_shipping = $cart_item["free_shipping"];
+			}
 			$tmp = array(
 			"productID" => $cart_item["productID"],
 			"slug" => $cart_item["slug"],
@@ -251,9 +280,11 @@ function cartGetCartContent(){
 			"name" =>	$cart_item["name"],
 			'thumbnail_url' => $cart_item['thumbnail']&&file_exists(DIR_PRODUCTS_PICTURES.'/'.$cart_item['thumbnail'])?URL_PRODUCTS_PICTURES.'/'.$cart_item['thumbnail']:'',
 			"brief_description"	=>	$cart_item["brief_description"],
-			"quantity"	=>	$cart_item["Quantity"],
-			"free_shipping"	=>	$cart_item["free_shipping"],
-			"product_priceWithUnit"	=>	show_price($costUC),						"costUC"	=>	$costUC,						"cost" => show_price($cart_item["Quantity"]*$costUC),
+			"quantity"	=>	$quantity,
+			"free_shipping"	=>	$free_shipping,
+			"costUC" => $costUC, 
+			"product_priceWithUnit"	=>	show_price($costUC), 
+			"cost" => show_price($quantity*$costUC),
 			"product_code" => $cart_item["product_code"],
 			);
 			if($tmp['thumbnail_url']){
@@ -264,6 +295,11 @@ function cartGetCartContent(){
 			$strOptions=GetStrOptions(GetConfigurationByItemId( $tmp["id"] ));
 			if(trim($strOptions) != "")
 			$tmp["name"].="  (".$strOptions.")";
+
+			if ( isset($cart_item["sample"]) && $cart_item["sample"] == 1 ) {
+			$tmp["name"].=" [SAMPLE]";
+			}
+
 			if ( $cart_item["min_order_amount"] > $cart_item["Quantity"] )
 			$tmp["min_order_amount"] = $cart_item["min_order_amount"];
 
@@ -271,7 +307,13 @@ function cartGetCartContent(){
 				$tmp["multiplicity"] = $cart_item["min_order_amount"];			
 			}
 
-			$total_price += $cart_item["Quantity"]*$costUC;
+			if ( isset($cart_item["sample"]) && $cart_item["sample"] == 1 ) {
+			unset($tmp["min_order_amount"]);
+			unset($tmp["multiplicity"]);
+			$tmp["sample"] = 1;
+			}
+
+			$total_price += $quantity*$costUC;
 			$cart_content[] = $tmp;
 		}
 	}else{ //unauthorized user - get cart from session vars
@@ -287,9 +329,20 @@ function cartGetCartContent(){
 				$q = db_phquery("SELECT t1.*, p1.thumbnail FROM ?#PRODUCTS_TABLE t1 LEFT JOIN ?#PRODUCT_PICTURES p1 ON t1.default_picture=p1.photoID WHERE t1.productID=?", $_SESSION["gids"][$j]);
 				if ($r = db_fetch_row($q)){
 					LanguagesManager::ml_fillFields(PRODUCTS_TABLE, $r);
-					$costUC = GetPriceProductWithOption(
-					$_SESSION["configurations"][$j],
-					$_SESSION["gids"][$j])/* * $_SESSION["counts"][$j]*/;
+					if ( isset($_SESSION["sample"][$j]) && $_SESSION["sample"][$j] == 1 ) {
+						$q_sample_price = db_phquery('SELECT sample_price FROM SC_categories WHERE categoryID=(SELECT categoryID FROM SC_products WHERE productID=?)', $_SESSION["gids"][$j]);
+						$sample_price = db_fetch_assoc( $q_sample_price );
+						$costUC = $sample_price["sample_price"];
+
+						$quantity = 1;
+						$free_shipping = 1;
+					} else {
+						$costUC = GetPriceProductWithOption(
+						$_SESSION["configurations"][$j],
+						$_SESSION["gids"][$j])/* * $_SESSION["counts"][$j]*/;
+						$quantity = $_SESSION["counts"][$j];
+						$free_shipping = $r["free_shipping"];
+					}
 					$id = $_SESSION["gids"][$j];
 					if (count($_SESSION["configurations"][$j]) > 0)
 					{
@@ -302,9 +355,11 @@ function cartGetCartContent(){
 					"name"		=>	$r['name'],
 					'thumbnail_url' => $r['thumbnail']&&file_exists(DIR_PRODUCTS_PICTURES.'/'.$r['thumbnail'])?URL_PRODUCTS_PICTURES.'/'.$r['thumbnail']:'',
 					"brief_description"	=> $r["brief_description"],
-					"quantity"	=>	$_SESSION["counts"][$j],
-					"free_shipping"	=>	$r["free_shipping"],
-					"product_priceWithUnit"	=>	show_price($costUC),										"costUC"	=>	$costUC,										"cost"		=>	show_price($costUC * $_SESSION["counts"][$j])
+					"quantity"	=>	$quantity,
+					"free_shipping"	=>	$free_shipping,										
+					"costUC"	=>	$costUC,	
+					"product_priceWithUnit"	=>	show_price($costUC),									
+					"cost"		=>	show_price($costUC * $quantity)
 					);
 					if($tmp['thumbnail_url']){
 						list($thumb_width, $thumb_height) = getimagesize(DIR_PRODUCTS_PICTURES.'/'.$r['thumbnail']);
@@ -313,6 +368,10 @@ function cartGetCartContent(){
 					$strOptions=GetStrOptions( $_SESSION["configurations"][$j] );
 					if ( trim($strOptions) != "" )
 					$tmp["name"].="  (".$strOptions.")";
+
+					if ( isset($_SESSION["sample"][$j]) && $_SESSION["sample"][$j] == 1 ) {
+					$tmp["name"].=" [SAMPLE]";
+					}
 					$q_product = db_query( "select min_order_amount, shipping_freight from ".PRODUCTS_TABLE.
 					" where productID=".
 					$_SESSION["gids"][$j] );
@@ -323,12 +382,25 @@ function cartGetCartContent(){
 					if ( $product["min_order_amount"] > 1 && ($_SESSION["counts"][$j] % $product["min_order_amount"]) != 0 ) {						
 						$tmp["multiplicity"] = $product["min_order_amount"];						
 					}
-					
+
+					if ( isset($_SESSION["sample"][$j]) && $_SESSION["sample"][$j] == 1 ) {
+					unset($tmp["min_order_amount"]);
+					unset($tmp["multiplicity"]);
+					$tmp["sample"] = 1;
+					}
+
 					$freight_cost += $_SESSION["counts"][$j]*$product["shipping_freight"];
 					$cart_content[] = $tmp;
-					$total_price += GetPriceProductWithOption(
-					$_SESSION["configurations"][$j],
-					$_SESSION["gids"][$j] )*$_SESSION["counts"][$j];
+					if ( isset($_SESSION["sample"][$j]) && $_SESSION["sample"][$j] == 1 ) {
+						$q_sample_price = db_phquery('SELECT sample_price FROM SC_categories WHERE categoryID=(SELECT categoryID FROM SC_products WHERE productID=?)', $_SESSION["gids"][$j]);
+						$sample_price = db_fetch_assoc( $q_sample_price );
+
+						$total_price += $sample_price["sample_price"];
+					} else {
+						$total_price += GetPriceProductWithOption(
+						$_SESSION["configurations"][$j],
+						$_SESSION["gids"][$j] )*$_SESSION["counts"][$j];
+					}		
 				}
 			}
 		}
@@ -340,7 +412,15 @@ function cartGetCartContent(){
 	);
 }
 
-function cartCheckMinOrderAmount(){	$cart_content = cartGetCartContent();	$cart_content = $cart_content["cart_content"];	foreach( $cart_content as $cart_item )	if ( isset($cart_item["min_order_amount"]) || isset($cart_item["multiplicity"]) )	return false;	return true;}
+function cartCheckMinOrderAmount()
+{	
+	$cart_content = cartGetCartContent();	
+	$cart_content = $cart_content["cart_content"];	
+	foreach( $cart_content as $cart_item )	
+	if ( isset($cart_item["min_order_amount"]) || isset($cart_item["multiplicity"]) )	
+	return false;	
+	return true;
+}
 
 function cartCheckMinTotalOrderAmount(){
 	$res = cartGetCartContent();
@@ -390,6 +470,7 @@ function cartMinimizeCart()
 					array_splice($_SESSION["gids"],$i,1);
 					array_splice($_SESSION["counts"],$i,1);
 					array_splice($_SESSION["configurations"],$i,1);
+					array_splice($_SESSION["sample"],$i,1);
 				}else{
 					$i++;
 				}
@@ -406,7 +487,7 @@ function cartMinimizeCart()
  * @param array $variants  - row is variantID
  * @param int $qty
  */
-function cartAddToCart( $productID, $variants, $qty = 1 ){
+function cartAddToCart( $productID, $variants, $qty = 1, $sample = 0 ){
 	if($qty === ''){$qty = 1;}
 	$qty = max(0,intval($qty));
 	$productID = intval($productID);
@@ -415,6 +496,8 @@ function cartAddToCart( $productID, $variants, $qty = 1 ){
 	if(!$product_data['enabled'])return false;
 	$is = intval($product_data['in_stock']);
 	$min_order_amount = $product_data['min_order_amount'];
+
+
 
 	//$min_order_amount = db_phquery_fetch(DBRFETCH_FIRST, "SELECT min_order_amount FROM ?#PRODUCTS_TABLE WHERE productID=?", $productID );
 	if (!isset($_SESSION["log"])){ //save shopping cart in the session variables
@@ -427,6 +510,7 @@ function cartAddToCart( $productID, $variants, $qty = 1 ){
 			$_SESSION["gids"] = array();
 			$_SESSION["counts"] = array();
 			$_SESSION["configurations"] = array();
+			$_SESSION["sample"] = array();
 		}
 		//check for current item in the current shopping cart content
 		$item_index=SearchConfigurationInSessionVariable( $variants, $productID );
@@ -439,8 +523,15 @@ function cartAddToCart( $productID, $variants, $qty = 1 ){
 				$qty = min($qty,$is - $_SESSION["counts"][$item_index]);
 			}
 			$qty = max($qty,0);
+			
+			$_SESSION["sample"][$item_index] = $sample;
+
 			if(CONF_CHECKSTOCK==0 || (($_SESSION["counts"][$item_index]+$qty <= $is)&&$is&&$qty)){
-				$_SESSION["counts"][$item_index] += $qty;
+				if ( $sample ) {
+					$_SESSION["counts"][$item_index] = 1;
+				} else {
+					$_SESSION["counts"][$item_index] += $qty;
+				}
 			}else{
 				return $_SESSION["counts"][$item_index];
 			}
@@ -450,6 +541,12 @@ function cartAddToCart( $productID, $variants, $qty = 1 ){
 				$qty = min($qty,$is);
 			}
 			$qty = max($qty,0);
+
+			if ( $sample ) {
+				$qty = 1;
+			}
+			$_SESSION["sample"][] = $sample;
+
 			if(CONF_CHECKSTOCK==0 || ($is >= $qty&&$qty)){
 				$_SESSION["gids"][] = $productID;
 				$_SESSION["counts"][] = $qty;
@@ -473,8 +570,13 @@ function cartAddToCart( $productID, $variants, $qty = 1 ){
 				$qty = min($qty,$is-$quantity);
 			}
 			$qty = max($qty,0);
+
 			if (CONF_CHECKSTOCK==0 || $quantity + $qty <= $is && $is){
-				db_phquery("UPDATE ?#SHOPPING_CARTS_TABLE SET Quantity=? WHERE customerID=? AND itemID=?", $quantity+$qty, $customerEntry->customerID, $itemID);
+				if ( $sample ) {
+					db_phquery("UPDATE ?#SHOPPING_CARTS_TABLE SET Quantity=?, sample=? WHERE customerID=? AND itemID=?", 1, $sample, $customerEntry->customerID, $itemID);
+				} else {
+					db_phquery("UPDATE ?#SHOPPING_CARTS_TABLE SET Quantity=?, sample=? WHERE customerID=? AND itemID=?", $quantity+$qty, $sample, $customerEntry->customerID, $itemID);
+				}
 			}else{
 				return $quantity;
 			}
@@ -484,11 +586,21 @@ function cartAddToCart( $productID, $variants, $qty = 1 ){
 			if(CONF_CHECKSTOCK!=0 && $qty > $is){
 				$qty = min($qty,$is);
 			}
+
+			if ( $sample ) {
+				$qty = 1;
+			}
+			
 			if ((CONF_CHECKSTOCK==0 || $is >= $qty)&&$qty>0){
 				$itemID=InsertNewItem($variants, $productID );
 				InsertItemIntoCart($itemID);
-				db_phquery("UPDATE ?#SHOPPING_CARTS_TABLE SET Quantity=? WHERE customerID=? AND itemID=?",
-				$qty, $customerEntry->customerID, $itemID);
+				if ( $sample ) {
+					db_phquery("UPDATE ?#SHOPPING_CARTS_TABLE SET Quantity=?, sample=? WHERE customerID=? AND itemID=?",
+					1, $sample, $customerEntry->customerID, $itemID);
+				} else {
+					db_phquery("UPDATE ?#SHOPPING_CARTS_TABLE SET Quantity=?, sample=? WHERE customerID=? AND itemID=?",
+					$qty, $sample, $customerEntry->customerID, $itemID);
+				}
 				cartUpdateAddCounter($productID);
 			}else{
 				return 0;

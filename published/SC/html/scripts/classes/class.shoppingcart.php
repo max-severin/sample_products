@@ -33,7 +33,11 @@
 		
 				$dbr = db_phquery( 'SELECT * FROM ?#PRODUCTS_TABLE WHERE productID=?',$productID);
 				if( !db_num_rows($dbr['resource']) )continue;
-				$product = db_fetch_assoc($dbr);
+				$product = db_fetch_assoc($dbr);			
+
+				if ($_SESSION['sample'][$i]) {
+					$product['free_shipping'] = 1;
+				}
 
 				$aItem = &$this->Items->child('item');
 				
@@ -41,6 +45,8 @@
 				if($product['shipping_freight'])
 					$aProduct->child('freight', array('currency'=>''), $product['shipping_freight']);
 				$aItem->child('quantity', null, $_SESSION['counts'][$i]);
+
+				$aItem->child('sample', null, $_SESSION['sample'][$i]);
 		
 				$aItem->attribute('id', $productID.(isset($_SESSION["configurations"][$i])&&count($_SESSION["configurations"][$i])?'_'.implode('_', $_SESSION["configurations"][$i]):''));
 				$aVariants = &$aItem->child('variants');
@@ -62,7 +68,7 @@
 			 * Select all items from SHOPPING_CARTS_TABLE
 			 */
 			$dbq = '
-				SELECT itemID, Quantity FROM ?#SHOPPING_CARTS_TABLE WHERE customerID=?
+				SELECT itemID, Quantity, sample FROM ?#SHOPPING_CARTS_TABLE WHERE customerID=?
 			';
 			$q_items = db_phquery($dbq, $customerID);
 			while($item = db_fetch_assoc($q_items)){
@@ -73,6 +79,10 @@
 				$dbr = db_phquery( 'SELECT * FROM ?#PRODUCTS_TABLE WHERE productID=?',$productID);
 				if( !db_num_rows($dbr['resource']) )continue;
 				$product = db_fetch_assoc($dbr);
+
+				if ($item['sample']) {
+					$product['free_shipping'] = 1;
+				}
 				
 				$aItem = &$this->Items->child('item');
 				$aItem->attribute('id', $item['itemID']);
@@ -81,6 +91,8 @@
 				if($product['shipping_freight'])
 					$aProduct->child('freight', array('currency'=>''), $product['shipping_freight']);
 				$aItem->child('quantity', null, $item['Quantity']);
+
+				$aItem->child('sample', null, $item['sample']);
 		
 				$variants = array();
 				$variants = GetConfigurationByItemId( $item["itemID"] );
@@ -133,7 +145,7 @@
 				//}
 				
 				$dbq = '
-					SELECT '.LanguagesManager::sql_prepareField('name').' AS name, product_code FROM ?#PRODUCTS_TABLE WHERE productID=?
+					SELECT '.LanguagesManager::sql_prepareField('name').' AS name, product_code, categoryID FROM ?#PRODUCTS_TABLE WHERE productID=?
 				';
 				$q_product = db_phquery($dbq, $productID);
 				$product = db_fetch_row( $q_product );
@@ -163,20 +175,32 @@
 		
 				$price = GetPriceProductWithOption( $variants, $productID );
 
+				if ($aItem->getChildData('sample')) {
+					$productComplexName .= " [SAMPLE]";
+
+					$q_sample_price = db_phquery('SELECT sample_price FROM SC_categories WHERE categoryID=(SELECT categoryID FROM SC_products WHERE productID=?)', $productID);
+					$sample_price = db_fetch_assoc( $q_sample_price );
+					$price = $sample_price["sample_price"];
+
+					$quantity = 1;
+				} else {					
+					$quantity = $aItem->getChildData('quantity');
+				}
+
 				$tax = $calculate_tax?taxCalculateTax2( $productID, $shipping_info, $billing_info ):0;
 				
 				$dbq = '
 					INSERT ?#ORDERED_CARTS_TABLE (itemID, orderID, name, Price, Quantity, tax )
 					VALUES (?, ?, ?, ?, ?, ?)
 				';
-				db_phquery($dbq, $aItem->attribute('id'), $orderID, $productComplexName, $price, $aItem->getChildData('quantity'), $tax);
+				db_phquery($dbq, $aItem->attribute('id'), $orderID, $productComplexName, $price, $quantity, $tax);
 				
 				$q = db_phquery( 'SELECT statusID FROM ?#ORDERS_TABLE WHERE orderID=?',$orderID );
 				$order = db_fetch_row( $q );
 				if ( $order["statusID"] != ostGetCanceledStatusId() && CONF_CHECKSTOCK ){
 					
 					$dbq = '
-						UPDATE ?#PRODUCTS_TABLE SET in_stock=in_stock-'.xEscapeSQLstring($aItem->getChildData('quantity')).'
+						UPDATE ?#PRODUCTS_TABLE SET in_stock=in_stock-'.xEscapeSQLstring($quantity).'
 						WHERE productID=? 
 					';
 					db_phquery($dbq, $productID);
@@ -218,14 +242,33 @@
 				$strOptions=GetStrOptions($this->emulate_GetConfigurationByItemId($aItem));
 				if ( trim($strOptions) != '' )$product['name'].='  ('.$strOptions.')';
 
+				$sample = $aItem->getChildData('sample');
+
+				if ( $sample == 1 ) {
+					$product['name'].=" [SAMPLE]";
+
+					$q_sample_price = db_phquery('SELECT sample_price FROM SC_categories WHERE categoryID=(SELECT categoryID FROM SC_products WHERE productID=?)', $aProduct->attribute('id'));
+					$sample_price = db_fetch_assoc( $q_sample_price );
+					$costUC = $sample_price["sample_price"];
+
+					$quantity = 1;
+					$cost = show_price($quantity*PaymentModule::_convertCurrency($costUC, $aPrice->attribute('currency'), 0), 0);
+					$free_shipping = 1;
+				} else {
+					$costUC = $aPrice->getData();
+					$cost = show_price($aItem->getChildData('quantity')*PaymentModule::_convertCurrency($aPrice->getData(), $aPrice->attribute('currency'), 0), 0);
+					$quantity = $aItem->getChildData('quantity');
+					$free_shipping = $aProduct->attribute('free-shipping');
+				}
+
 				$cart_content[] = array(
 					'productID' =>  $aProduct->attribute('id'),
 					'id'		=>	$aItem->attribute('id')?$aItem->attribute('id'):0, 
 					'name'		=>	$product['name'], 
-					'quantity'	=>	$aItem->getChildData('quantity'),
-					'free_shipping'	=>	$aProduct->attribute('free-shipping'), 
-					'costUC' =>	$aPrice->getData(),
-					'cost' => show_price($aItem->getChildData('quantity')*PaymentModule::_convertCurrency($aPrice->getData(), $aPrice->attribute('currency'), 0), 0),
+					'quantity'	=>	$quantity,
+					'free_shipping'	=>	$free_shipping, 
+					'costUC' =>	$costUC,
+					'cost' => $cost,
 					'product_code' =>	$product['product_code'],
 					);
 				$aFreight = $aProduct->getFirstChildByName('freight');
@@ -338,7 +381,7 @@
 					$variants[] = $aVariant->attribute('id');
 				}
 				
-				cartAddToCart($productID, $variants, $aItem->getChildData('quantity'));
+				cartAddToCart($productID, $variants, $aItem->getChildData('quantity'), $aItem->getChildData('sample') );
 			}
 			cartMinimizeCart();
 			

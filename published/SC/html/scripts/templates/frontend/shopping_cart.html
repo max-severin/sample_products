@@ -40,7 +40,23 @@
 	<input type="hidden" name="update" value="1" >
 	<input type="hidden" name="shopping_cart" value="1" >
 	
-<table id="cart_content_tbl" cellspacing="0">    		<colgroup>        			<col width="10%" />        			<col width="50%" />        			<col width="10%" />        			<col width="10%" />        			<col width="15%" />        			<col width="5%" />    		</colgroup>		<tr id="cart_content_header">			<td></td>			<td></td>			<td align="center">Price Per Unit</td>			<td align="center">{lbl_cart_product_quantity}</td>			<td align="center">{lbl_cart_products_total}</td>			<td></td>		</tr>
+	<table id="cart_content_tbl" cellspacing="0">
+    <colgroup>
+        <col width="10%" />
+        <col width="50%" />
+        <col width="10%" />
+        <col width="10%" />
+        <col width="15%" />
+        <col width="5%" />
+    </colgroup>
+	<tr id="cart_content_header">
+		<td></td>
+		<td></td>
+		<td align="center">Price Per Unit</td>
+		<td align="center">{lbl_cart_product_quantity}</td>
+		<td align="center">{lbl_cart_products_total}</td>
+		<td></td>
+	</tr>
 
 	{assign var="ProductsNum" value=0}
 	{section loop=$cart_content name=i}
@@ -56,7 +72,10 @@
 			{$cart_content[i].name}
 			{/if}
 			{if $cart_content[i].brief_description}<div class="cart_product_brief_description">{$cart_content[i].brief_description}</div>{/if}
-		</td>		<td align="center" nowrap="nowrap">			{$cart_content[i].product_priceWithUnit}		</td>		
+		</td>		
+		<td align="center" nowrap="nowrap">			
+			{$cart_content[i].product_priceWithUnit}		
+		</td>		
 		<td align="center">
 			{assign var="ProductsNum" value=$ProductsNum+$cart_content[i].quantity}
 
@@ -64,7 +83,7 @@
 			{else}{assign var=_prdid value=$cart_content[i].id}
 			{/if}
 			
-			<input class="cart_product_quantity digit" type="text" maxlength="10" name="count_{$_prdid}" value="{$cart_content[i].quantity}" size="5" >
+			<input {if $cart_content[i].sample == 1}disabled{/if} class="cart_product_quantity digit" type="text" maxlength="10" name="count_{$_prdid}" value="{$cart_content[i].quantity}" size="5" >
 			
 			{if $cart_content[i].min_order_amount}
 			<div class="error_block"><span class="error_msg" style="font-size:smaller">
@@ -72,7 +91,12 @@
 				{$cart_content[i].min_order_amount} 
 				{"str_items"|translate}
 			</span></div>
-			{/if}						{if $cart_content[i].multiplicity}	<div class="error_block"><span class="error_msg" style="font-size:smaller">		This wallpaper is packaged in {if $cart_content[i].multiplicity == 2}double{elseif $cart_content[i].multiplicity == 3}triple{else}{$cart_content[i].multiplicity}{/if} rolls. Please change your single roll quantity up or down to an even quantity of single rolls.	</span></div>			{/if}	
+			{/if}						
+			{if $cart_content[i].multiplicity}	
+			<div class="error_block"><span class="error_msg" style="font-size:smaller">		
+				This wallpaper is packaged in {if $cart_content[i].multiplicity == 2}double{elseif $cart_content[i].multiplicity == 3}triple{else}{$cart_content[i].multiplicity}{/if} rolls. Please change your single roll quantity up or down to an even quantity of single rolls.	
+			</span></div>			
+			{/if}	
 		</td>
 		<td align="center" nowrap="nowrap">
 			{$cart_content[i].cost}
